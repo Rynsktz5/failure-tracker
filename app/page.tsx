@@ -1,65 +1,128 @@
-import Image from "next/image";
+"use client"
+
+import { useEffect, useMemo, useState } from "react"
+import Header from "@/components/Header"
+import StatCard from "@/components/StatCard"
+import FailureModal from "@/components/FailureModal"
+import FailureChart from "@/components/FailureChart"
+import { getFailures, Failure } from "@/lib/storage"
+import Link from "next/link"
+import { getInsights } from "@/lib/patternEngine"
 
 export default function Home() {
+  const [failures, setFailures] = useState<Failure[]>([])
+  const [open, setOpen] = useState(false)
+  const [hasNewInsight, setHasNewInsight] = useState(false)
+
+  useEffect(() => {
+    setFailures(getFailures())
+  }, [open])
+ useEffect(() => {
+  const insights = getInsights()
+  const unseen = insights.some(i => !i.seen)
+  setHasNewInsight(unseen)
+}, [])
+
+  // ✅ Memoized total
+  const totalFailures = useMemo(() => failures.length, [failures])
+const retryRate = useMemo(() => {
+  if (failures.length === 0) return 0
+
+  const retryCount = failures.filter(f => f.retry).length
+  return Math.round((retryCount / failures.length) * 100)
+}, [failures])
+
+  // ✅ Memoized last failure
+  const lastFailureDate = useMemo(() => {
+    if (failures.length === 0) return "None"
+    return new Date(failures[0].date).toLocaleDateString()
+  }, [failures])
+
+  // ✅ Memoized streak
+  const streak = useMemo(() => {
+    if (failures.length === 0) return 0
+
+    const uniqueDays = Array.from(
+      new Set(
+        failures.map((f) =>
+          new Date(f.date).toISOString().split("T")[0]
+        )
+      )
+    )
+
+    uniqueDays.sort(
+      (a, b) =>
+        new Date(b).getTime() - new Date(a).getTime()
+    )
+
+    let streakCount = 1
+
+    for (let i = 1; i < uniqueDays.length; i++) {
+      const prev = new Date(uniqueDays[i - 1])
+      const curr = new Date(uniqueDays[i])
+
+      const diff =
+        (prev.getTime() - curr.getTime()) /
+        (1000 * 60 * 60 * 24)
+
+      if (diff === 1) {
+        streakCount++
+      } else {
+        break
+      }
+    }
+
+    return streakCount
+  }, [failures])
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+    <>
+      <Header />
+      {hasNewInsight && (
+  <Link
+    href="/insights"
+    className="mt-4 inline-block text-red-500 hover:text-red-400 transition drop-shadow-[0_0_6px_rgba(239,68,68,0.6)]"
+  >
+    A growth insight is ready for you(Click here)
+  </Link>
+)}
+
+
+
+      <main className="max-w-5xl mx-auto px-6 py-10">
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+  <StatCard label="Total Failures" value={totalFailures} />
+  <StatCard label="Last Failure" value={lastFailureDate} />
+  <StatCard label="Failure Streak (Days)" value={streak} />
+  <StatCard label="Retry Rate (%)" value={`${retryRate}%`} />
+</div>
+
+
+        <button
+          onClick={() => setOpen(true)}
+          className="mt-8 bg-red-600 hover:bg-red-700 px-6 py-3 rounded-xl font-bold transition-all duration-300 hover:shadow-[0_0_20px_rgba(239,68,68,0.7)]"
+        >
+          + Log Failure
+        </button>
+        <Link
+  href="/failures"
+  className="ml-4 bg-neutral-800 px-6 py-3 rounded-xl font-bold hover:bg-neutral-700 transition"
+>
+  View Failures
+</Link>
+<Link
+  href="/analyzer"
+  className="ml-4 bg-neutral-800 px-6 py-3 rounded-xl font-bold hover:bg-neutral-700 transition"
+>
+  AI Analyzer
+</Link>
+
+
+
+        <FailureChart failures={failures} />
       </main>
-    </div>
-  );
+
+      {open && <FailureModal onClose={() => setOpen(false)} />}
+    </>
+  )
 }
